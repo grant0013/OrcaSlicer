@@ -1,10 +1,10 @@
 {
 	"type": "process",
-	"setting_id": "GP004",
 	"name": "0.20mm Standard @Creality K2 0.4 nozzle",
-	"from": "system",
-	"instantiation": "true",
 	"inherits": "fdm_process_creality_common",
+	"from": "system",
+	"setting_id": "GP004",
+	"instantiation": "true",
 	"accel_to_decel_enable": "1",
 	"accel_to_decel_factor": "100",
 	"acceleration_limit_mess": "[[0.5,1.0,100,6000,210],[1.0,1.5,80,5500,200],[1.5,2.0,60,5000,190]]",
@@ -264,5 +264,6 @@
 	"wipe_tower_rotation_angle": "0",
 	"wiping_volumes_extruders": "70,70,70,70,70,70,70,70,70,70",
 	"xy_contour_compensation": "0",
-	"xy_hole_compensation": "0"
+	"xy_hole_compensation": "0",
+	"wipe_tower_wall_type": "rectangle"
 }

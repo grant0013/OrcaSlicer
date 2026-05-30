@@ -3414,12 +3414,13 @@ int PartPlate::load_gcode_from_file(const std::string& filename)
 	int ret = 0;
 
 	// process gcode
-	DynamicPrintConfig full_config = wxGetApp().preset_bundle->full_config();
+	std::vector<int>   filament_maps = this->get_filament_maps();
+	DynamicPrintConfig full_config   = wxGetApp().preset_bundle->full_config(false, filament_maps);
 	full_config.apply(m_config, true);
-	m_print->apply(*m_model, full_config);
+	m_print->apply(*m_model, full_config, false);
 	//BBS: need to apply two times, for after the first apply, the m_print got its object,
 	//which will affect the config when new_full_config.normalize_fdm(used_filaments);
-	m_print->apply(*m_model, full_config);
+	m_print->apply(*m_model, full_config, false);
 
 	// BBS: use backup path to save temp gcode
     // auto path = get_tmp_gcode_path();
@@ -4156,6 +4157,31 @@ void PartPlateList::set_default_wipe_tower_pos_for_plate(int plate_idx, bool ini
 
     if (!init_pos && (is_approx(wipe_tower_size(0), 0.0) || is_approx(wipe_tower_size(1), 0.0))) {
         wipe_tower_size = part_plate->estimate_wipe_tower_size(print_cfg, w, v, nozzle_nums, 2, false, enable_wrapping);
+    }
+
+    // Prime tower placement by bed-corner grid position (ported from CrealityPrint).
+    // The default Middle_Upper keeps the legacy fixed placement set above, so printers that
+    // do not set prime_tower_position_type are unchanged; any other value re-anchors the tower
+    // relative to the bed corners. Result is still clamped to the plate below.
+    {
+        const ConfigOptionEnum<GCodeFlavorText> *pos_type_opt = full_config.option<ConfigOptionEnum<GCodeFlavorText>>("prime_tower_position_type");
+        const ConfigOptionPoints *bed_pts = full_config.option<ConfigOptionPoints>("printable_area");
+        if (pos_type_opt && bed_pts && bed_pts->values.size() > 3 && pos_type_opt->value != Middle_Upper) {
+            const std::vector<Vec2d> &p = bed_pts->values;
+            const ConfigOptionFloat *rot_opt = print_cfg.option<ConfigOptionFloat>("wipe_tower_rotation_angle");
+            const bool small_rot = (rot_opt ? rot_opt->value : 0.f) <= 15.f;
+            switch (pos_type_opt->value) {
+            case Left_Upper:    x = p[3].x() + (small_rot ? 15 : 35); y = small_rot ? p[3].y() - 35 : p[3].y() - w - 15; break;
+            case Left_Center:   x = p[3].x() + (small_rot ? 15 : 35); y = p[3].y() / 2; break;
+            case Left_Below:    x = p[0].x() + (small_rot ? 15 : 35); y = p[0].y() + 15; break;
+            case Middle_Center: x = small_rot ? p[2].x() / 2 - w / 2 : p[2].x() / 2; y = p[2].y() / 2; break;
+            case Middle_Below:  x = small_rot ? p[1].x() / 2 - w / 2 : p[1].x() / 2; y = p[1].y() + 15; break;
+            case Right_Upper:   x = small_rot ? p[2].x() - w - 15 : p[2].x() - 15; y = small_rot ? p[2].y() - 35 : p[2].y() - w - 15; break;
+            case Right_Center:  x = small_rot ? p[2].x() - w - 15 : p[2].x() - 15; y = p[2].y() / 2; break;
+            case Right_Below:   x = small_rot ? p[1].x() - w - 15 : p[1].x() - 15; y = p[1].y() + 15; break;
+            default: break; // Middle_Upper handled by legacy default
+            }
+        }
     }
 
     // Compute brim-aware margin: brim extends outward from tower position
@@ -6102,6 +6128,9 @@ int PartPlateList::store_to_3mf_structure(PlateDataPtrs& plate_data_list, bool w
 					plate_data_item->is_label_object_enabled = m_plate_list[i]->m_gcode_result->label_object_enabled;
                     plate_data_item->limit_filament_maps = m_plate_list[i]->m_gcode_result->limit_filament_maps;
                     plate_data_item->layer_filaments  = m_plate_list[i]->m_gcode_result->layer_filaments;
+                    plate_data_item->filament_change_sequence = m_plate_list[i]->m_gcode_result->filament_change_sequence;
+                    plate_data_item->nozzle_change_sequence = m_plate_list[i]->m_gcode_result->nozzle_change_sequence;
+                    plate_data_item->optimal_assignment = m_plate_list[i]->m_gcode_result->optimal_assignment;
                     plate_data_item->first_layer_time = std::to_string(m_plate_list[i]->cali_bboxes_data.first_layer_time);
 					Print *print                      = nullptr;
 					m_plate_list[i]->get_print((PrintBase **) &print, nullptr, nullptr);
@@ -6177,6 +6206,9 @@ int PartPlateList::load_from_3mf_structure(PlateDataPtrs& plate_data_list, int f
 		gcode_result->label_object_enabled = plate_data_list[i]->is_label_object_enabled;
         gcode_result->timelapse_warning_code = plate_data_list[i]->timelapse_warning_code;
         m_plate_list[index]->set_timelapse_warning_code(plate_data_list[i]->timelapse_warning_code);
+        gcode_result->filament_change_sequence = plate_data_list[i]->filament_change_sequence;
+        gcode_result->nozzle_change_sequence = plate_data_list[i]->nozzle_change_sequence;
+        gcode_result->optimal_assignment = plate_data_list[i]->optimal_assignment;
 		m_plate_list[index]->slice_filaments_info = plate_data_list[i]->slice_filaments_info;
 		gcode_result->warnings = plate_data_list[i]->warnings;
         gcode_result->filament_maps = plate_data_list[i]->filament_maps;
