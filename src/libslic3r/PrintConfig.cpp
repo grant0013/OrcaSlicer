@@ -134,6 +134,20 @@ static t_config_enum_values s_keys_map_PrinterTechnology {
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(PrinterTechnology)
 
+// Prime/wipe tower placement on the bed (ported from CrealityPrint).
+static t_config_enum_values s_keys_map_GCodeFlavorText {
+    { "Left Upper",    Left_Upper },
+    { "Middle Upper",  Middle_Upper },
+    { "Right Upper",   Right_Upper },
+    { "Left Center",   Left_Center },
+    { "Middle Center", Middle_Center },
+    { "Right Center",  Right_Center },
+    { "Left Below",    Left_Below },
+    { "Middle Below",  Middle_Below },
+    { "Right Below",   Right_Below }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(GCodeFlavorText)
+
 static t_config_enum_values s_keys_map_PrintHostType {
     { "prusalink",      htPrusaLink },
     { "prusaconnect",   htPrusaConnect },
@@ -6721,6 +6735,32 @@ void PrintConfigDef::init_fff_params()
     def->min = 2.0;
     def->mode = comSimple;
     def->set_default_value(new ConfigOptionFloat(60.));
+
+    // Prime/wipe tower placement on the bed (ported from CrealityPrint).
+    def = this->add("prime_tower_position_type", coEnum);
+    def->label = L("Tower Position");
+    def->tooltip = L("The position of the Prime Tower on the platform.");
+    def->enum_keys_map = &ConfigOptionEnum<GCodeFlavorText>::get_enum_values();
+    def->enum_values.push_back("Left Upper");
+    def->enum_values.push_back("Middle Upper");
+    def->enum_values.push_back("Right Upper");
+    def->enum_values.push_back("Left Center");
+    def->enum_values.push_back("Middle Center");
+    def->enum_values.push_back("Right Center");
+    def->enum_values.push_back("Left Below");
+    def->enum_values.push_back("Middle Below");
+    def->enum_values.push_back("Right Below");
+    def->enum_labels.push_back(L("Left Upper"));
+    def->enum_labels.push_back(L("Middle Upper"));
+    def->enum_labels.push_back(L("Right Upper"));
+    def->enum_labels.push_back(L("Left Center"));
+    def->enum_labels.push_back(L("Middle Center"));
+    def->enum_labels.push_back(L("Right Center"));
+    def->enum_labels.push_back(L("Left Below"));
+    def->enum_labels.push_back(L("Middle Below"));
+    def->enum_labels.push_back(L("Right Below"));
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionEnum<GCodeFlavorText>(Middle_Upper));
 
     def = this->add("wipe_tower_rotation_angle", coFloat);
     def->label = L("Wipe tower rotation angle");

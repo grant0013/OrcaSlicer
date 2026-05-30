@@ -4159,6 +4159,31 @@ void PartPlateList::set_default_wipe_tower_pos_for_plate(int plate_idx, bool ini
         wipe_tower_size = part_plate->estimate_wipe_tower_size(print_cfg, w, v, nozzle_nums, 2, false, enable_wrapping);
     }
 
+    // Prime tower placement by bed-corner grid position (ported from CrealityPrint).
+    // The default Middle_Upper keeps the legacy fixed placement set above, so printers that
+    // do not set prime_tower_position_type are unchanged; any other value re-anchors the tower
+    // relative to the bed corners. Result is still clamped to the plate below.
+    {
+        const ConfigOptionEnum<GCodeFlavorText> *pos_type_opt = full_config.option<ConfigOptionEnum<GCodeFlavorText>>("prime_tower_position_type");
+        const ConfigOptionPoints *bed_pts = full_config.option<ConfigOptionPoints>("printable_area");
+        if (pos_type_opt && bed_pts && bed_pts->values.size() > 3 && pos_type_opt->value != Middle_Upper) {
+            const std::vector<Vec2d> &p = bed_pts->values;
+            const ConfigOptionFloat *rot_opt = print_cfg.option<ConfigOptionFloat>("wipe_tower_rotation_angle");
+            const bool small_rot = (rot_opt ? rot_opt->value : 0.f) <= 15.f;
+            switch (pos_type_opt->value) {
+            case Left_Upper:    x = p[3].x() + (small_rot ? 15 : 35); y = small_rot ? p[3].y() - 35 : p[3].y() - w - 15; break;
+            case Left_Center:   x = p[3].x() + (small_rot ? 15 : 35); y = p[3].y() / 2; break;
+            case Left_Below:    x = p[0].x() + (small_rot ? 15 : 35); y = p[0].y() + 15; break;
+            case Middle_Center: x = small_rot ? p[2].x() / 2 - w / 2 : p[2].x() / 2; y = p[2].y() / 2; break;
+            case Middle_Below:  x = small_rot ? p[1].x() / 2 - w / 2 : p[1].x() / 2; y = p[1].y() + 15; break;
+            case Right_Upper:   x = small_rot ? p[2].x() - w - 15 : p[2].x() - 15; y = small_rot ? p[2].y() - 35 : p[2].y() - w - 15; break;
+            case Right_Center:  x = small_rot ? p[2].x() - w - 15 : p[2].x() - 15; y = p[2].y() / 2; break;
+            case Right_Below:   x = small_rot ? p[1].x() - w - 15 : p[1].x() - 15; y = p[1].y() + 15; break;
+            default: break; // Middle_Upper handled by legacy default
+            }
+        }
+    }
+
     // Compute brim-aware margin: brim extends outward from tower position
     float brim_width = 0.f;
     const ConfigOptionFloat *brim_opt = print_cfg.option<ConfigOptionFloat>("prime_tower_brim_width");

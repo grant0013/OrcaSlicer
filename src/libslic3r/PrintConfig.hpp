@@ -42,8 +42,21 @@ enum GCodeFlavor : unsigned char {
     gcfSailfish, 
     gcfMach3, 
     gcfMachinekit,
-    gcfSmoothie, 
+    gcfSmoothie,
     gcfNoExtrusion
+};
+
+// Prime/wipe tower placement on the bed (ported from CrealityPrint).
+enum GCodeFlavorText : unsigned char {
+    Left_Upper,
+    Middle_Upper,
+    Right_Upper,
+    Left_Center,
+    Middle_Center,
+    Right_Center,
+    Left_Below,
+    Middle_Below,
+    Right_Below
 };
 
 
@@ -1291,6 +1304,7 @@ PRINT_CONFIG_CLASS_DEFINE(
 PRINT_CONFIG_CLASS_DEFINE(
     GCodeConfig,
 
+    ((ConfigOptionEnum<GCodeFlavorText>, prime_tower_position_type))
     ((ConfigOptionString,              before_layer_change_gcode))
     ((ConfigOptionString,              printing_by_object_gcode))
     ((ConfigOptionFloats,              deretraction_speed))

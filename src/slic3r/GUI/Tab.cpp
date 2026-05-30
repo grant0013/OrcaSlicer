@@ -5003,6 +5003,7 @@ if (is_marlin_flavor)
         optgroup->append_single_option_line("purge_in_prime_tower", "printer_multimaterial_wipe_tower#purge-in-prime-tower");
         optgroup->append_single_option_line("enable_filament_ramming", "printer_multimaterial_wipe_tower#enable-filament-ramming");
         optgroup->append_single_option_line("tool_change_on_wipe_tower", "printer_multimaterial_wipe_tower#tool-change-on-wipe-tower");
+        optgroup->append_single_option_line("prime_tower_position_type", "printer_multimaterial_wipe_tower");
 
 
         optgroup = page->new_optgroup(L("Single extruder multi-material parameters"), "param_settings");
