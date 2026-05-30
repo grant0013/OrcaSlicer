@@ -1,9 +1,10 @@
 {
 	"type": "machine",
-	"from": "system",
-	"settings_id": "GM001",
-	"instantiation": "true",
+	"name": "Creality K2 0.4 nozzle",
 	"inherits": "fdm_creality_common",
+	"from": "system",
+	"instantiation": "true",
+	"settings_id": "GM001",
 	"printer_model": "Creality K2",
 	"printer_settings_id": "Creality",
 	"auxiliary_fan": "1",
@@ -178,5 +179,5 @@
 	"z_hop": [
 		"0.4"
 	],
-	"name": "Creality K2 0.4 nozzle"
+	"prime_tower_position_type": "Middle Upper"
 }

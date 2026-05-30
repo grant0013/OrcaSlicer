@@ -146,5 +146,6 @@
 	"thumbnails": [
 		"300x300",
 		"96x96"
-	]
+	],
+	"prime_tower_position_type": "Middle Upper"
 }

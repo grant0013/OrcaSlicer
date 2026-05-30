@@ -1,6 +1,6 @@
 {
 	"name": "Creality",
-	"version": "02.03.02.75",
+	"version": "02.03.02.77",
 	"force_update": "0",
 	"description": "Creality configurations",
 	"machine_model_list": [
@@ -895,6 +895,38 @@
 			"sub_path": "process/0.16mm Optimal @Creality K2 0.4 nozzle.json"
 		},
 		{
+			"name": "0.08mm HueForge @Creality K2 0.4 nozzle",
+			"sub_path": "process/0.08mm HueForge @Creality K2 0.4 nozzle.json"
+		},
+		{
+			"name": "0.08mm HueForge @Creality K2 Plus 0.4 nozzle",
+			"sub_path": "process/0.08mm HueForge @Creality K2 Plus 0.4 nozzle.json"
+		},
+		{
+			"name": "0.08mm HueForge @Creality K2 Pro 0.4 nozzle",
+			"sub_path": "process/0.08mm HueForge @Creality K2 Pro 0.4 nozzle.json"
+		},
+		{
+			"name": "0.20mm Strength @Creality K2 Plus 0.4 nozzle",
+			"sub_path": "process/0.20mm Strength @Creality K2 Plus 0.4 nozzle.json"
+		},
+		{
+			"name": "0.30mm Strength @Creality K2 Plus 0.6 nozzle",
+			"sub_path": "process/0.30mm Strength @Creality K2 Plus 0.6 nozzle.json"
+		},
+		{
+			"name": "0.40mm Strength @Creality K2 Plus 0.8 nozzle",
+			"sub_path": "process/0.40mm Strength @Creality K2 Plus 0.8 nozzle.json"
+		},
+		{
+			"name": "0.20mm High Quality @Creality K2 Plus 0.4 nozzle",
+			"sub_path": "process/0.20mm High Quality @Creality K2 Plus 0.4 nozzle.json"
+		},
+		{
+			"name": "0.20mm SpecialFilament @Creality K2 Plus 0.4 nozzle",
+			"sub_path": "process/0.20mm SpecialFilament @Creality K2 Plus 0.4 nozzle.json"
+		},
+		{
 			"name": "0.16mm Optimal @Creality K2 Plus 0.4 nozzle",
 			"sub_path": "process/0.16mm Optimal @Creality K2 Plus 0.4 nozzle.json"
 		},
@@ -1455,6 +1487,42 @@
 		{
 			"name": "CR-PETG @Creality K2 Pro 0.4 nozzle",
 			"sub_path": "filament/CR-PETG @Creality K2 Pro 0.4 nozzle.json"
+		},
+		{
+			"name": "Hyper PETG @Creality K2 0.4 nozzle",
+			"sub_path": "filament/Hyper PETG @Creality K2 0.4 nozzle.json"
+		},
+		{
+			"name": "Hyper PETG @Creality K2 Plus 0.2 nozzle",
+			"sub_path": "filament/Hyper PETG @Creality K2 Plus 0.2 nozzle.json"
+		},
+		{
+			"name": "Hyper PETG @Creality K2 Plus 0.4 nozzle",
+			"sub_path": "filament/Hyper PETG @Creality K2 Plus 0.4 nozzle.json"
+		},
+		{
+			"name": "Hyper PETG @Creality K2 Plus 0.6 nozzle",
+			"sub_path": "filament/Hyper PETG @Creality K2 Plus 0.6 nozzle.json"
+		},
+		{
+			"name": "Hyper PETG @Creality K2 Plus 0.8 nozzle",
+			"sub_path": "filament/Hyper PETG @Creality K2 Plus 0.8 nozzle.json"
+		},
+		{
+			"name": "Hyper PETG @Creality K2 Pro 0.4 nozzle",
+			"sub_path": "filament/Hyper PETG @Creality K2 Pro 0.4 nozzle.json"
+		},
+		{
+			"name": "Hyper PETG-CF @Creality K2 0.4 nozzle",
+			"sub_path": "filament/Hyper PETG-CF @Creality K2 0.4 nozzle.json"
+		},
+		{
+			"name": "Hyper PETG-CF @Creality K2 Plus 0.4 nozzle",
+			"sub_path": "filament/Hyper PETG-CF @Creality K2 Plus 0.4 nozzle.json"
+		},
+		{
+			"name": "Hyper PETG-CF @Creality K2 Pro 0.4 nozzle",
+			"sub_path": "filament/Hyper PETG-CF @Creality K2 Pro 0.4 nozzle.json"
 		},
 		{
 			"name": "CR-ABS @Creality K2 Pro 0.6 nozzle",
