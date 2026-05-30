@@ -1408,6 +1408,28 @@ void PlaterPresetComboBox::update()
     add_presets(bundle_presets, selected_bundle_preset, L("Bundle presets"), bundle_group_name);
     // BBS: move system to the end
     add_presets(system_presets, selected_system_preset, L("System presets"), _L("System"));
+    // ORCA(k2-discovery): for filaments, drop an incompatible preset from the "Unsupported"
+    // group when a compatible preset with the same alias already exists. This hides the
+    // redundant other-nozzle variants (which share a filament_id/alias and get installed
+    // together) while still surfacing genuinely orphaned filaments.
+    if (m_type == Preset::TYPE_FILAMENT && !uncompatible_presets.empty()) {
+        std::set<std::string> compatible_aliases;
+        for (const std::map<wxString, wxBitmap *> *group :
+             {&system_presets, &nonsys_presets, &project_embedded_presets, &bundle_presets}) {
+            for (const auto &kv : *group) {
+                auto it = preset_aliases.find(kv.first);
+                if (it != preset_aliases.end())
+                    compatible_aliases.insert(it->second);
+            }
+        }
+        for (auto it = uncompatible_presets.begin(); it != uncompatible_presets.end();) {
+            auto ait = preset_aliases.find(it->first);
+            if (ait != preset_aliases.end() && compatible_aliases.count(ait->second))
+                it = uncompatible_presets.erase(it);
+            else
+                ++it;
+        }
+    }
     add_presets(uncompatible_presets, {}, L("Unsupported presets"), _L("Unsupported") + " ");
 
     //BBS: remove unused pysical printer logic
