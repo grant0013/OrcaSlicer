@@ -138,7 +138,7 @@ bool CrealityPrint::upload(PrintHostUpload upload_data, ProgressFn prorgess_fn, 
     }
 
     bool res = true;
-    auto url = make_url("upload/" + safe_filename(upload_filename.string()));
+    auto url = make_url("upload/" + Http::url_encode(safe_filename(upload_filename.string())));
 
     auto  http = Http::post(url); // std::move(url));
     set_auth(http);
