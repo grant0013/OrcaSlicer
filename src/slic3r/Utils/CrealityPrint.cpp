@@ -288,6 +288,7 @@ static const std::map<std::string, std::string>& cfs_capable_models()
         {"K1", "K1"},
         {"K1 SE", "K1 SE"},
         {"K1C", "K1C"},
+        {"K1_CFS-C", "K1 CFS-C"},
     };
     return models;
 }
