@@ -54,7 +54,7 @@ struct LifetimeGuard
 	LifetimeGuard(BonjourDialog *dialog) : dialog(dialog) {}
 };
 
-BonjourDialog::BonjourDialog(wxWindow *parent, Slic3r::PrinterTechnology tech)
+BonjourDialog::BonjourDialog(wxWindow *parent, Slic3r::PrinterTechnology tech, std::string service)
 	: wxDialog(parent, wxID_ANY, _(L("Network lookup")), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER)
 	, list(new wxListView(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT|wxSIMPLE_BORDER))
 	, replies(new ReplySet)
@@ -62,6 +62,7 @@ BonjourDialog::BonjourDialog(wxWindow *parent, Slic3r::PrinterTechnology tech)
 	, timer(new wxTimer())
 	, timer_state(0)
 	, tech(tech)
+	, service(std::move(service))
 {
 	const int em = GUI::wxGetApp().em_unit();
 	list->SetMinSize(wxSize(80 * em, 30 * em));
@@ -76,7 +77,7 @@ BonjourDialog::BonjourDialog(wxWindow *parent, Slic3r::PrinterTechnology tech)
 	list->AppendColumn(_(L("Hostname")), wxLIST_FORMAT_LEFT, 10 * em);
 	list->AppendColumn(_(L("Service name")), wxLIST_FORMAT_LEFT, 20 * em);
 	if (tech == ptFFF) {
-		list->AppendColumn(_(L("OctoPrint version")), wxLIST_FORMAT_LEFT, 5 * em);
+		list->AppendColumn(_(L("Service version")), wxLIST_FORMAT_LEFT, 5 * em);
 	}
 
 	vsizer->Add(list, 1, wxEXPAND | wxALL, em);
@@ -123,7 +124,7 @@ bool BonjourDialog::show_and_lookup()
 	// Note: More can be done here when we support discovery of hosts other than Octoprint and SL1
 	Bonjour::TxtKeys txt_keys { "version", "model" };
 
-    bonjour = Bonjour("octoprint")
+    bonjour = Bonjour(service)
 		.set_txt_keys(std::move(txt_keys))
 		.set_retries(3)
 		.set_timeout(4)

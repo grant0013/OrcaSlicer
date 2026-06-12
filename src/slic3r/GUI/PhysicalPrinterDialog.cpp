@@ -253,7 +253,11 @@ void PhysicalPrinterDialog::build_printhost_settings(ConfigOptionsGroup* m_optgr
                 return;
             }
 
-            BonjourDialog dialog(this, Preset::printer_technology(*m_config));
+            // Moonraker (Klipper) hosts announce themselves via DNS-SD as
+            // _moonraker._tcp; everything else discoverable here advertises
+            // OctoPrint's service name.
+            BonjourDialog dialog(this, Preset::printer_technology(*m_config),
+                                 host_type == htMoonraker ? "moonraker" : "octoprint");
             if (dialog.show_and_lookup()) {
                 m_optgroup->set_value("print_host", dialog.get_selected(), true);
                 m_optgroup->get_field("print_host")->field_changed();

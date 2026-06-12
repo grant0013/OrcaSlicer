@@ -34,6 +34,8 @@
 #include "GUI_App.hpp"
 #include "GUI_ObjectList.hpp"
 #include "slic3r/Utils/PresetUpdater.hpp"
+#include "slic3r/Utils/Moonraker.hpp"
+#include <wx/checkbox.h>
 #include "Plater.hpp"
 #include "MainFrame.hpp"
 #include "format.hpp"
@@ -4806,9 +4808,147 @@ void TabPrinter::append_option_line(ConfigOptionsGroupShp optgroup, const std::s
     optgroup->append_line(line);
 }
 
+
+// ORCA (Hark Tech): pull the motion limits a connected Klipper printer
+// actually enforces (queried live via Moonraker) into this preset. The
+// printer is the source of truth for what it can do; hand-copying these
+// numbers from printer.cfg is exactly the drift this removes.
+void TabPrinter::sync_machine_limits_from_klipper()
+{
+    // Connection details usually live on the selected physical printer; fall
+    // back to the preset's own print_host for setups without one.
+    DynamicPrintConfig *host_cfg = wxGetApp().preset_bundle->physical_printers.get_selected_printer_config();
+    if (host_cfg == nullptr || host_cfg->opt_string("print_host").empty())
+        host_cfg = m_config;
+
+    if (host_cfg->option("host_type") == nullptr ||
+        host_cfg->opt_enum<PrintHostType>("host_type") != htMoonraker) {
+        MessageDialog(this, _L("Machine limit sync needs a Moonraker (Klipper) host.\nSet \"Host type\" to \"Moonraker (Klipper)\" in the connection settings of this preset or its physical printer."),
+                      _L("Sync from printer"), wxICON_WARNING | wxOK).ShowModal();
+        return;
+    }
+    if (host_cfg->opt_string("print_host").empty()) {
+        MessageDialog(this, _L("No print host configured.\nSet the printer's IP or hostname in the connection settings first."),
+                      _L("Sync from printer"), wxICON_WARNING | wxOK).ShowModal();
+        return;
+    }
+
+    Moonraker             host(host_cfg);
+    MoonrakerMachineLimits limits;
+    wxString               err;
+    bool                   ok;
+    {
+        wxBusyCursor wait;
+        ok = host.query_machine_limits(limits, err);
+    }
+    if (!ok) {
+        MessageDialog(this, err, _L("Sync from printer"), wxICON_ERROR | wxOK).ShowModal();
+        return;
+    }
+
+    struct Row { std::string opt_key; wxString label; double cur; double val; };
+    std::vector<Row> rows;
+    auto add = [&](const std::string &opt_key, const wxString &label, const boost::optional<double> &val) {
+        if (!val)
+            return;
+        const auto *opt = m_config->option<ConfigOptionFloats>(opt_key);
+        if (opt == nullptr || opt->values.empty())
+            return;
+        if (std::abs(opt->values.front() - *val) < 1e-6)
+            return; // already in sync
+        rows.push_back({opt_key, label, opt->values.front(), *val});
+    };
+
+    add("machine_max_speed_x", _L("Maximum speed X"), limits.max_velocity);
+    add("machine_max_speed_y", _L("Maximum speed Y"), limits.max_velocity);
+    add("machine_max_speed_z", _L("Maximum speed Z"), limits.max_z_velocity);
+    add("machine_max_speed_e", _L("Maximum speed E"), limits.max_extrude_only_velocity);
+    add("machine_max_acceleration_x", _L("Maximum acceleration X"), limits.max_accel);
+    add("machine_max_acceleration_y", _L("Maximum acceleration Y"), limits.max_accel);
+    add("machine_max_acceleration_z", _L("Maximum acceleration Z"), limits.max_z_accel);
+    add("machine_max_acceleration_e", _L("Maximum acceleration E"), limits.max_extrude_only_accel);
+    add("machine_max_acceleration_extruding", _L("Maximum acceleration for extruding"), limits.max_accel);
+    add("machine_max_acceleration_travel", _L("Maximum acceleration for travel"), limits.max_accel);
+    // Klipper's square_corner_velocity is the live analogue of per-axis jerk
+    // for planning purposes (and is what Orca's klipper g-code flavour emits
+    // back via SET_VELOCITY_LIMIT).
+    add("machine_max_jerk_x", _L("Maximum jerk X"), limits.square_corner_velocity);
+    add("machine_max_jerk_y", _L("Maximum jerk Y"), limits.square_corner_velocity);
+
+    if (rows.empty()) {
+        MessageDialog(this, _L("This preset already matches the motion limits the printer reports."),
+                      _L("Sync from printer"), wxICON_INFORMATION | wxOK).ShowModal();
+        return;
+    }
+
+    // Confirmation: every difference listed, opt-out per row, nothing applied silently.
+    wxDialog dlg(this, wxID_ANY, _L("Sync machine limits from printer"), wxDefaultPosition, wxDefaultSize,
+                 wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+    const int em     = wxGetApp().em_unit();
+    auto     *vsizer = new wxBoxSizer(wxVERTICAL);
+    vsizer->Add(new wxStaticText(&dlg, wxID_ANY,
+                                 _L("The printer reports different motion limits to this preset.\nTicked values will be updated:")),
+                0, wxALL, em);
+
+    auto *grid = new wxFlexGridSizer(4, em / 4, em);
+    grid->Add(new wxStaticText(&dlg, wxID_ANY, _L("Setting")), 0);
+    grid->Add(new wxStaticText(&dlg, wxID_ANY, _L("Preset")), 0, wxALIGN_RIGHT);
+    grid->Add(new wxStaticText(&dlg, wxID_ANY, ""), 0);
+    grid->Add(new wxStaticText(&dlg, wxID_ANY, _L("Printer")), 0, wxALIGN_RIGHT);
+
+    std::vector<wxCheckBox *> checks;
+    for (const Row &row : rows) {
+        auto *cb = new wxCheckBox(&dlg, wxID_ANY, row.label);
+        cb->SetValue(true);
+        checks.push_back(cb);
+        grid->Add(cb, 0, wxALIGN_CENTER_VERTICAL);
+        grid->Add(new wxStaticText(&dlg, wxID_ANY, wxString::Format("%g", row.cur)), 0, wxALIGN_CENTER_VERTICAL | wxALIGN_RIGHT);
+        grid->Add(new wxStaticText(&dlg, wxID_ANY, wxString::FromUTF8("\xE2\x86\x92")), 0, wxALIGN_CENTER_VERTICAL);
+        grid->Add(new wxStaticText(&dlg, wxID_ANY, wxString::Format("%g", row.val)), 0, wxALIGN_CENTER_VERTICAL | wxALIGN_RIGHT);
+    }
+    vsizer->Add(grid, 1, wxEXPAND | wxLEFT | wxRIGHT, em);
+    vsizer->Add(dlg.CreateStdDialogButtonSizer(wxOK | wxCANCEL), 0, wxEXPAND | wxALL, em);
+    dlg.SetSizerAndFit(vsizer);
+    wxGetApp().UpdateDlgDarkUI(&dlg);
+    if (dlg.ShowModal() != wxID_OK)
+        return;
+
+    DynamicPrintConfig new_conf = *m_config;
+    bool any = false;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (!checks[i]->IsChecked())
+            continue;
+        auto *opt = new_conf.option<ConfigOptionFloats>(rows[i].opt_key);
+        opt->values.front() = rows[i].val; // silent-mode column (index 1) is left alone
+        any = true;
+    }
+    if (any)
+        load_config(new_conf);
+}
+
 PageShp TabPrinter::build_kinematics_page()
 {
     auto page = add_options_page(L("Motion ability"), "custom-gcode_motion", true); // ORCA: icon only visible on placeholders
+
+    // ORCA (Hark Tech): one-click sync of these limits from a live Klipper
+    // printer — see TabPrinter::sync_machine_limits_from_klipper().
+    {
+        auto optgroup_sync = page->new_optgroup("");
+        auto sync_btn_widget = [this](wxWindow *parent) {
+            auto *btn = new ScalableButton(parent, wxID_ANY, "printer", _L("Sync from printer (Klipper)"),
+                                           wxDefaultSize, wxDefaultPosition, wxBU_LEFT | wxBU_EXACTFIT, true);
+            btn->SetFont(wxGetApp().normal_font());
+            btn->SetToolTip(_L("Query the connected Moonraker (Klipper) printer for the motion limits it actually enforces and update this preset."));
+            auto *sizer = new wxBoxSizer(wxHORIZONTAL);
+            sizer->Add(btn);
+            btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { sync_machine_limits_from_klipper(); });
+            return sizer;
+        };
+        Line line = Line{"", ""};
+        line.full_width = 1;
+        line.append_widget(sync_btn_widget);
+        optgroup_sync->append_line(line);
+    }
 
     if (m_use_silent_mode) {
         // Legend for OptionsGroups

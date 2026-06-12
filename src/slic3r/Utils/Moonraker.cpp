@@ -110,6 +110,87 @@ bool Moonraker::test(wxString &msg) const
     return res;
 }
 
+bool Moonraker::query_machine_limits(MoonrakerMachineLimits &limits, wxString &error) const
+{
+    //ORCA: One query returns everything: `toolhead` carries the LIVE limits (reflecting any
+    //      runtime SET_VELOCITY_LIMIT), `configfile.settings` is the parsed config with section
+    //      defaults filled in (lowercased keys), covering what toolhead doesn't expose
+    //      (z limits, stepper ranges, extruder-only limits). `extruder` is intentionally NOT
+    //      queried as a status object — its interesting limits only live in the config.
+    const char *name = get_name();
+    bool res = true;
+    auto url = make_url("printer/objects/query?toolhead&configfile");
+
+    BOOST_LOG_TRIVIAL(info) << boost::format("%1%: Query machine limits at: %2%") % name % url;
+
+    auto http = Http::get(std::move(url));
+    set_auth(http);
+    http.timeout_connect(5)
+        .timeout_max(10)
+        .on_error([&](std::string body, std::string err, unsigned status) {
+            BOOST_LOG_TRIVIAL(error) << boost::format("%1%: Error querying machine limits: %2%, HTTP %3%, body: `%4%`")
+                % name % err % status % body;
+            res = false;
+            error = format_error(body, err, status);
+        })
+        .on_complete([&](std::string body, unsigned) {
+            try {
+                std::stringstream ss(body);
+                pt::ptree ptree;
+                pt::read_json(ss, ptree);
+
+                const auto status = ptree.get_child_optional("result.status");
+                if (!status) {
+                    //ORCA: Moonraker wraps errors as {"error": {...}} with HTTP 200 in some proxy
+                    //      setups; a missing result.status also catches non-Moonraker hosts.
+                    res = false;
+                    const auto err_msg = ptree.get_optional<std::string>("error.message");
+                    error = err_msg ? GUI::format_wxstr(_L("Printer reported an error: %s"), *err_msg)
+                                    : _L("The host responded but it doesn't look like Moonraker (missing result.status).");
+                    return;
+                }
+
+                auto opt = [&status](const char *path) -> boost::optional<double> {
+                    return status->get_optional<double>(pt::ptree::path_type(path, '/'));
+                };
+
+                limits.max_velocity           = opt("toolhead/max_velocity");
+                limits.max_accel              = opt("toolhead/max_accel");
+                limits.square_corner_velocity = opt("toolhead/square_corner_velocity");
+
+                limits.max_z_velocity = opt("configfile/settings/printer/max_z_velocity");
+                limits.max_z_accel    = opt("configfile/settings/printer/max_z_accel");
+                limits.kinematics     = status->get<std::string>("configfile.settings.printer.kinematics", "");
+
+                limits.max_extrude_only_velocity = opt("configfile/settings/extruder/max_extrude_only_velocity");
+                limits.max_extrude_only_accel    = opt("configfile/settings/extruder/max_extrude_only_accel");
+
+                //ORCA: Bed envelope from homed stepper ranges. Only meaningful where axes map to
+                //      cartesian-style steppers; deltas/polar report no such ranges and the fields
+                //      simply stay unset, which downstream treats as "don't sync the bed".
+                limits.bed_min_x = opt("configfile/settings/stepper_x/position_min");
+                limits.bed_max_x = opt("configfile/settings/stepper_x/position_max");
+                limits.bed_min_y = opt("configfile/settings/stepper_y/position_min");
+                limits.bed_max_y = opt("configfile/settings/stepper_y/position_max");
+                limits.max_z     = opt("configfile/settings/stepper_z/position_max");
+
+                if (!limits.max_velocity && !limits.max_accel) {
+                    res = false;
+                    error = _L("Klipper did not report any motion limits — is the printer initialized (klippy ready)?");
+                }
+            } catch (const std::exception &ex) {
+                res = false;
+                error = GUI::format_wxstr(_L("Could not parse Moonraker server response: %s"), ex.what());
+            }
+        })
+#ifdef WIN32
+        .ssl_revoke_best_effort(m_ssl_revoke_best_effort)
+#endif
+        .perform_sync();
+
+    return res;
+}
+
 bool Moonraker::get_storage(wxArrayString &storage_path, wxArrayString &storage_name) const
 {
     //ORCA: GET /server/files/roots enumerates Moonraker's storage roots (default "gcodes" plus any
