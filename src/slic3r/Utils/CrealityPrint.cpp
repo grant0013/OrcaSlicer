@@ -263,6 +263,7 @@ static bool is_k1_family(const std::string& model)
         "K1",
         "K1 SE",
         "K1C",
+        "K1_CFS-C",
     };
     return k1_models.count(model) > 0;
 }
