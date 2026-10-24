@@ -1,5 +1,6 @@
 #include "MoonrakerPrinterAgent.hpp"
 #include "Http.hpp"
+#include "MoonrakerFilamentLibrary.hpp"
 #include "IPrinterAgent.hpp"
 #include "NetworkAgentFactory.hpp"
 #include "bambu_networking.hpp"
@@ -7,6 +8,7 @@
 #include "libslic3r/PresetBundle.hpp"
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/GUI/I18N.hpp"
+#include "slic3r/GUI/Tab.hpp"
 #include "slic3r/GUI/DeviceManager.hpp"
 #include "slic3r/GUI/DeviceCore/DevFilaSystem.h"
 #include "slic3r/GUI/DeviceCore/DevManager.h"
@@ -36,6 +38,7 @@
 #include <boost/filesystem/path.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/log/trivial.hpp>
+#include <wx/thread.h>
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -788,6 +791,7 @@ bool MoonrakerPrinterAgent::fetch_moonraker_filament_data(std::vector<AmsTrayDat
     const auto& value = json["result"]["value"];
     trays.clear();
     max_lane_index = 0;
+    std::map<int, MoonrakerFilamentLibrary::Profile> lane_profiles;
 
     for (const auto& [lane_key, lane_obj] : value.items()) {
         if (!lane_obj.is_object()) {
@@ -821,6 +825,18 @@ bool MoonrakerPrinterAgent::fetch_moonraker_filament_data(std::vector<AmsTrayDat
             ? bundle->filaments.filament_id_by_type(tray.tray_type)
             : map_filament_type_to_generic_id(tray.tray_type);
 
+        // A lane that names the printer's own filament profile (Creality K2 open stack)
+        MoonrakerFilamentLibrary::Profile profile;
+        profile.library_id = safe_json_string(lane_obj, "filament_id");
+        profile.name       = safe_json_string(lane_obj, "name");
+        if (tray.has_filament && !profile.library_id.empty() && !profile.name.empty()) {
+            profile.vendor = safe_json_string(lane_obj, "vendor");
+            profile.type   = tray.tray_type;
+            profile.color  = boost::trim_left_copy_if(tray.tray_color, boost::is_any_of("#"));
+            MoonrakerFilamentLibrary::read_settings(lane_obj, profile);
+            lane_profiles[lane_index] = std::move(profile);
+        }
+
         max_lane_index = std::max(max_lane_index, lane_index);
         trays.push_back(tray);
     }
@@ -830,7 +846,46 @@ bool MoonrakerPrinterAgent::fetch_moonraker_filament_data(std::vector<AmsTrayDat
         return false;
     }
 
+    if (!lane_profiles.empty())
+        map_lanes_to_printer_profiles(trays, lane_profiles);
+
     return true;
+}
+
+// Point lanes that name a printer filament profile at a user preset carrying that
+// profile, made or refreshed here, instead of the generic preset of their material.
+void MoonrakerPrinterAgent::map_lanes_to_printer_profiles(std::vector<AmsTrayData>&                         trays,
+                                                          std::map<int, MoonrakerFilamentLibrary::Profile>& profiles)
+{
+    auto* bundle = GUI::wxGetApp().preset_bundle;
+    if (bundle == nullptr || !wxThread::IsMain())
+        return;
+
+    // lane_data carries only some settings; the hark_cfs_slots object has all of them.
+    nlohmann::json status;
+    std::string    error;
+    if (MoonrakerFilamentLibrary::fetch_status(device_info.base_url, device_info.api_key, status, error)) {
+        for (auto& [lane, slot] : MoonrakerFilamentLibrary::slot_profiles(status)) {
+            auto it = profiles.find(lane);
+            if (it != profiles.end() && it->second.library_id == slot.library_id)
+                it->second = std::move(slot);
+        }
+    } else {
+        BOOST_LOG_TRIVIAL(info) << "MoonrakerPrinterAgent::map_lanes_to_printer_profiles: using lane_data settings only: " << error;
+    }
+
+    bool changed = false;
+    for (auto& tray : trays) {
+        auto it = profiles.find(tray.slot_index);
+        if (it == profiles.end())
+            continue;
+        const std::string filament_id = MoonrakerFilamentLibrary::sync_preset(*bundle, it->second, changed);
+        if (!filament_id.empty())
+            tray.tray_info_idx = filament_id;
+    }
+    GUI::Tab* tab = changed ? GUI::wxGetApp().get_tab(Preset::TYPE_FILAMENT) : nullptr;
+    if (tab != nullptr)
+        tab->update_tab_ui();
 }
 
 // Fetch filament info from Happy Hare MMU

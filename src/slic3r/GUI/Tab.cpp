@@ -98,6 +98,8 @@
 #include "IMEXModesCtrl.hpp"
 #include "MultiChoiceDialog.hpp"
 #include "MsgDialog.hpp"
+#include "slic3r/Utils/MoonrakerFilamentLibrary.hpp"
+#include <wx/utils.h>
 #include "Notebook.hpp"
 
 #include "Widgets/ComboBox.hpp"
@@ -4516,6 +4518,48 @@ void TabFilament::update_filament_overrides_page(const DynamicPrintConfig* print
     }
 }
 
+void TabFilament::send_to_printer_library()
+{
+    const DynamicPrintConfig& printer = m_preset_bundle->printers.get_edited_preset().config;
+    const std::string         host    = printer.opt_string("print_host");
+    if (host.empty()) {
+        MessageDialog(this, _L("The selected printer has no host. Set it in the printer's connection settings first."),
+                      _L("Send to printer"), wxOK | wxICON_WARNING).ShowModal();
+        return;
+    }
+    const std::string base_url = MoonrakerFilamentLibrary::host_to_base_url(host);
+    const std::string api_key  = printer.opt_string("printhost_apikey");
+    const std::string name     = MoonrakerFilamentLibrary::library_name(m_presets->get_edited_preset().name);
+
+    wxBusyCursor   busy;
+    nlohmann::json status;
+    std::string    error;
+    if (!MoonrakerFilamentLibrary::fetch_status(base_url, api_key, status, error)) {
+        // TRN %1% is the reason, e.g. "the printer has no hark_cfs_slots object" or a connection error.
+        MessageDialog(this, format_wxstr(_L("The selected printer has no filament library to send to (%1%)."), error),
+                      _L("Send to printer"), wxOK | wxICON_WARNING).ShowModal();
+        return;
+    }
+
+    const std::string bed_temp_key = m_preset_bundle->project_config.has("curr_bed_type") ?
+                                         get_bed_temp_key(m_preset_bundle->project_config.opt_enum<BedType>("curr_bed_type")) :
+                                         "hot_plate_temp";
+    std::string       skipped;
+    const std::string command = MoonrakerFilamentLibrary::build_save_command(*m_config, name, status, bed_temp_key, skipped);
+    BOOST_LOG_TRIVIAL(info) << "TabFilament: sending " << command << " to " << base_url;
+    if (!MoonrakerFilamentLibrary::run_gcode(base_url, api_key, command, error)) {
+        // TRN %1% is the filament name, %2% the printer's error message.
+        MessageDialog(this, format_wxstr(_L("The printer did not save \"%1%\":\n%2%"), name, error), _L("Send to printer"),
+                      wxOK | wxICON_ERROR).ShowModal();
+        return;
+    }
+    wxString message = format_wxstr(_L("Saved \"%1%\" to the printer's filament library."), name);
+    // TRN %1% lists settings with their values, e.g. "filament_retraction_speed 30".
+    if (!skipped.empty())
+        message += "\n\n" + format_wxstr(_L("Not sent, outside the range the printer accepts: %1%"), skipped);
+    MessageDialog(this, message, _L("Send to printer"), wxOK | wxICON_INFORMATION).ShowModal();
+}
+
 void TabFilament::build()
 {
     m_presets = &m_preset_bundle->filaments;
@@ -4547,6 +4591,19 @@ void TabFilament::build()
         Line line = { L("Recommended nozzle temperature"), L("Recommended nozzle temperature range of this filament. 0 means not set") };
         line.append_option(optgroup->get_option("nozzle_temperature_range_low", 0));
         line.append_option(optgroup->get_option("nozzle_temperature_range_high", 0));
+        optgroup->append_line(line);
+
+        // Orca: the filament library a Klipper printer keeps for its slots (Creality K2 open stack)
+        line = Line{ L("Printer filament library"), L("Save this filament, with its temperatures, pressure advance, flow ratio, "
+                                                  "retraction and fan speeds, to the filament library of the selected printer.") };
+        line.widget = [this](wxWindow* parent) {
+            Button* btn = new Button(parent, _L("Send to printer"));
+            btn->SetStyle(ButtonStyle::Regular, ButtonType::Parameter);
+            btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { send_to_printer_library(); });
+            auto sizer = new wxBoxSizer(wxHORIZONTAL);
+            sizer->Add(btn, 0, wxALIGN_CENTER_VERTICAL);
+            return sizer;
+        };
         optgroup->append_line(line);
 
         optgroup->m_on_change = [this, optgroup](t_config_option_key opt_key, boost::any value) {

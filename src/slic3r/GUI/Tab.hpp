@@ -646,6 +646,8 @@ private:
     void            add_filament_overrides_page();
     void            update_filament_overrides_page(const DynamicPrintConfig* printers_config);
 	void 			update_volumetric_flow_preset_hints();
+    // Store the edited filament in the selected printer's filament library (CFS_FILAMENT_SAVE).
+    void            send_to_printer_library();
     // The variant index the variant switch shows, 0 without one.
     unsigned int    selected_variant_index() const;
 

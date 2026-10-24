@@ -2,9 +2,11 @@
 #define __MOONRAKER_PRINTER_AGENT_HPP__
 
 #include "IPrinterAgent.hpp"
+#include "MoonrakerFilamentLibrary.hpp"
 #include "bambu_networking.hpp"
 
 #include <functional>
+#include <map>
 #include <cstdint>
 #include <atomic>
 #include <memory>
@@ -163,6 +165,7 @@ private:
     // System-specific filament fetch methods
     bool fetch_hh_filament_info(std::vector<AmsTrayData>& trays, int& max_lane_index);
     bool fetch_moonraker_filament_data(std::vector<AmsTrayData>& trays, int& max_lane_index);
+    void map_lanes_to_printer_profiles(std::vector<AmsTrayData>& trays, std::map<int, MoonrakerFilamentLibrary::Profile>& profiles);
 
     // JSON helper methods
     static std::string safe_json_string(const nlohmann::json& obj, const char* key);
