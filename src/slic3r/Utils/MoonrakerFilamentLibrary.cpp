@@ -131,28 +131,9 @@ bool apply_profile(DynamicPrintConfig& config, const Profile& profile, const std
     return changed;
 }
 
-// Stable filament_id for a printer profile, in the "P" + 7 hex digits form of
-// user-created filaments. FNV-1a, so it is the same on every platform and run.
-std::string profile_filament_id(const Profile& profile)
+bool set_colour(DynamicPrintConfig& config, const Profile& profile)
 {
-    const std::string key  = "moonraker-filament:" + (profile.library_id.empty() ? profile.vendor + "/" + profile.name : profile.library_id);
-    uint32_t          hash = 2166136261u;
-    for (unsigned char c : key) {
-        hash ^= c;
-        hash *= 16777619u;
-    }
-    char buf[16];
-    std::snprintf(buf, sizeof(buf), "P%07x", hash & 0xfffffffu);
-    return buf;
-}
-
-std::string preset_name(const Profile& profile, const std::string& printer)
-{
-    std::string name = profile.name;
-    for (char& c : name)
-        if (c == '/' || c == '\\')
-            c = '-';
-    return name + " @" + printer;
+    return profile.color.size() == 6 && set_string(config, "default_filament_colour", "#" + profile.color);
 }
 
 bool lists_printer(const Preset& preset, const std::string& printer)
@@ -237,6 +218,48 @@ void read_settings(const nlohmann::json& obj, Profile& profile)
         if (it != obj.end() && it->is_number())
             profile.settings[s.field] = it->get<double>();
     }
+}
+
+void assign_slot_presets(std::map<int, Profile>& profiles)
+{
+    std::map<std::string, const Profile*> first_by_id;
+    for (auto& [lane, profile] : profiles) {
+        auto [first, inserted] = first_by_id.emplace(profile.library_id, &profile);
+        if (inserted)
+            continue;
+        if (profile.settings != first->second->settings)
+            profile.variant = lane >= 0 && lane < 26 ? std::string("slot ") + char('A' + lane) : "slot " + std::to_string(lane + 1);
+        else
+            profile.color.clear(); // the first slot's preset, whose colour that slot sets
+    }
+}
+
+// Stable filament_id for a printer profile, in the "P" + 7 hex digits form of
+// user-created filaments. FNV-1a, so it is the same on every platform and run.
+std::string profile_filament_id(const Profile& profile)
+{
+    std::string key = "moonraker-filament:" + (profile.library_id.empty() ? profile.vendor + "/" + profile.name : profile.library_id);
+    if (!profile.variant.empty())
+        key += "#" + profile.variant;
+    uint32_t hash = 2166136261u;
+    for (unsigned char c : key) {
+        hash ^= c;
+        hash *= 16777619u;
+    }
+    char buf[16];
+    std::snprintf(buf, sizeof(buf), "P%07x", hash & 0xfffffffu);
+    return buf;
+}
+
+std::string preset_name(const Profile& profile, const std::string& printer)
+{
+    std::string name = profile.name;
+    for (char& c : name)
+        if (c == '/' || c == '\\')
+            c = '-';
+    if (!profile.variant.empty())
+        name += " (" + profile.variant + ")";
+    return name + " @" + printer;
 }
 
 bool fetch_status(const std::string& base_url, const std::string& api_key, nlohmann::json& status, std::string& error)
@@ -331,8 +354,10 @@ std::string sync_preset(PresetBundle& bundle, const Profile& profile, bool& chan
     if (existing != nullptr) {
         if (existing->inherits().empty() && !existing->filament_id.empty())
             id = existing->filament_id;
-        DynamicPrintConfig config = existing->config;
-        if (!apply_profile(config, profile, bed_temp_key) && existing->inherits().empty() && id == existing->filament_id)
+        DynamicPrintConfig config  = existing->config;
+        bool               differs = apply_profile(config, profile, bed_temp_key);
+        differs |= set_colour(config, profile);
+        if (!differs && existing->inherits().empty() && id == existing->filament_id)
             return id;
         if (filaments.get_edited_preset().name == existing->name && filaments.current_is_dirty()) {
             BOOST_LOG_TRIVIAL(warning) << "MoonrakerFilamentLibrary: \"" << existing->name
@@ -357,8 +382,7 @@ std::string sync_preset(PresetBundle& bundle, const Profile& profile, bool& chan
         if (auto* compatible = preset.config.option<ConfigOptionStrings>("compatible_printers"))
             compatible->values = {printer};
         apply_profile(preset.config, profile, bed_temp_key);
-        if (is_new && profile.color.size() == 6)
-            set_string(preset.config, "default_filament_colour", "#" + profile.color);
+        set_colour(preset.config, profile);
     }, !is_new);
     if (!ok) {
         BOOST_LOG_TRIVIAL(warning) << "MoonrakerFilamentLibrary: could not save filament preset \"" << name << "\"";

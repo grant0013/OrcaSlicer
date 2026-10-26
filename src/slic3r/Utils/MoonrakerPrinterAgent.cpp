@@ -873,6 +873,7 @@ void MoonrakerPrinterAgent::map_lanes_to_printer_profiles(std::vector<AmsTrayDat
     } else {
         BOOST_LOG_TRIVIAL(info) << "MoonrakerPrinterAgent::map_lanes_to_printer_profiles: using lane_data settings only: " << error;
     }
+    MoonrakerFilamentLibrary::assign_slot_presets(profiles);
 
     bool changed = false;
     for (auto& tray : trays) {

@@ -31,10 +31,18 @@ struct Profile
     // Printer field -> value: nozzle_temp, nozzle_first, min_temp, max_temp, bed_temp,
     // pressure_advance, flow_ratio, retract_length, retract_speed, fan_min, fan_max.
     std::map<std::string, double> settings;
+    // Set for a slot whose settings differ from an earlier slot with the same printer
+    // profile, e.g. "slot B": the slot then gets a preset of its own.
+    std::string variant;
 };
 
 // Read the settings fields a lane_data entry or hark_cfs_slots record carries into profile.settings.
 void read_settings(const nlohmann::json& obj, Profile& profile);
+
+// Decide which lanes (slot A = 0) share a preset. Lanes with the same printer profile and
+// the same settings share the first lane's preset, and only that lane sets its colour. A
+// lane whose settings differ, such as its own pressure advance, gets a variant.
+void assign_slot_presets(std::map<int, Profile>& profiles);
 
 // Query the hark_cfs_slots printer object. Returns false when the printer does not have it.
 bool fetch_status(const std::string& base_url, const std::string& api_key, nlohmann::json& status, std::string& error);
@@ -47,6 +55,10 @@ std::map<int, Profile> slot_profiles(const nlohmann::json& status);
 // filament_id, or an empty string when no preset could be made. GUI thread only.
 // `changed` is set when a preset was created or rewritten.
 std::string sync_preset(PresetBundle& bundle, const Profile& profile, bool& changed);
+
+// Name and filament_id of the preset a profile syncs to for a printer preset.
+std::string preset_name(const Profile& profile, const std::string& printer);
+std::string profile_filament_id(const Profile& profile);
 
 // Name a preset has in the printer library: the preset name without its " @<printer>" scope.
 std::string library_name(const std::string& preset_name);

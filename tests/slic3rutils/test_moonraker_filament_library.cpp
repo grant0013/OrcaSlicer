@@ -62,6 +62,39 @@ TEST_CASE("Loaded K2 slots become profiles keyed by lane", "[MoonrakerFilamentLi
     CHECK(profiles.at(2).library_id == "u-my-petg");
 }
 
+TEST_CASE("Slots with one printer profile share a preset unless their settings differ", "[MoonrakerFilamentLibrary]")
+{
+    Library::Profile black;
+    black.library_id                   = "cr-04001";
+    black.name                         = "CR-PLA";
+    black.color                        = "000000";
+    black.settings["pressure_advance"] = 0.04;
+
+    std::map<int, Library::Profile> profiles;
+    profiles[1]       = black; // slot B
+    profiles[2]       = black; // slot C, same settings
+    profiles[2].color = "FB8C00";
+    profiles[3]       = black; // slot D, its own pressure advance
+    profiles[3].color = "808080";
+    profiles[3].settings["pressure_advance"] = 0.0741;
+
+    Library::assign_slot_presets(profiles);
+
+    CHECK(profiles.at(1).variant.empty());
+    CHECK(profiles.at(1).color == "000000"); // the first slot sets the shared preset's colour
+    CHECK(profiles.at(2).variant.empty());
+    CHECK(profiles.at(2).color.empty());
+    CHECK(profiles.at(3).variant == "slot D");
+    CHECK(profiles.at(3).color == "808080");
+
+    CHECK(Library::preset_name(profiles.at(1), "Creality K2 Mainline") == "CR-PLA @Creality K2 Mainline");
+    CHECK(Library::preset_name(profiles.at(3), "Creality K2 Mainline") == "CR-PLA (slot D) @Creality K2 Mainline");
+    CHECK(Library::profile_filament_id(profiles.at(1)) == Library::profile_filament_id(profiles.at(2)));
+    CHECK(Library::profile_filament_id(profiles.at(1)) != Library::profile_filament_id(profiles.at(3)));
+    // Presets made before slot variants existed keep their filament_id
+    CHECK(Library::profile_filament_id(profiles.at(1)) == "Pf986c83");
+}
+
 TEST_CASE("Saving updates the printer's entry of the same name", "[MoonrakerFilamentLibrary]")
 {
     std::string skipped;
